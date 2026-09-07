@@ -7,6 +7,6 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ||
-      `mysql://${process.env.DATABASE_USER || "root"}:${process.env.DATABASE_PASSWORD || ""}@${process.env.DATABASE_HOST || "localhost"}:${process.env.DATABASE_PORT || "3306"}/${process.env.DATABASE_NAME || "belajar_db"}`,
+      `mysql://${process.env.DATABASE_USER || "root"}:${process.env.DATABASE_PASSWORD || "asep123"}@${process.env.DATABASE_HOST || "localhost"}:${process.env.DATABASE_PORT || "3306"}/${process.env.DATABASE_NAME || "belajar_db"}`,
   },
 });

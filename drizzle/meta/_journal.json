@@ -8,6 +8,13 @@
       "when": 1788779924483,
       "tag": "0000_curly_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1788797791079,
+      "tag": "0001_good_hex",
+      "breakpoints": true
     }
   ]
 }
