@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1788779924483,
+      "tag": "0000_curly_lady_deathstrike",
+      "breakpoints": true
+    }
+  ]
+}
