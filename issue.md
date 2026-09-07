@@ -1,81 +1,163 @@
-# Project Setup: REST API dengan Bun + ElysiaJS + Drizzle + MySQL
+# Issue: Implementasi API Registrasi User
 
 ## Deskripsi
 
-Buat project REST API baru di repository ini menggunakan **Bun** sebagai runtime, **ElysiaJS** sebagai framework HTTP, **Drizzle ORM** untuk database layer, dan **MySQL** sebagai database.
+Buatkan API untuk registrasi user baru. API ini menerima data user (name, email, password), melakukan hashing password menggunakan bcrypt, dan menyimpan ke database MySQL.
 
 ---
 
-## 1. Inisialisasi Project
+## 1. Update Schema Database
 
-- Inisialisasi project Bun baru di root folder (`bun init`)
-- Setup TypeScript config yang sesuai
-- Buat struktur folder:
-  ```
-  src/
-  ├── index.ts          # Entry point, setup server ElysiaJS
-  ├── db/
-  │   ├── index.ts      # Koneksi database & Drizzle instance
-  │   └── schema.ts     # Definisi schema/tabel Drizzle
-  ├── routes/
-  │   └── index.ts      # Definisi routes API
-  └── env.ts            # Validasi environment variables
-  ```
+Update tabel `users` di `src/db/schema.ts` agar sesuai dengan struktur berikut:
 
-## 2. Install Dependencies
+| Kolom        | Tipe             | Keterangan                    |
+|-------------|------------------|-------------------------------|
+| `id`         | INT              | Auto Increment, Primary Key   |
+| `name`       | VARCHAR(255)     | NOT NULL                      |
+| `email`      | VARCHAR(255)     | NOT NULL, UNIQUE              |
+| `password`   | VARCHAR(255)     | NOT NULL (hash bcrypt)        |
+| `created_at` | TIMESTAMP        | DEFAULT CURRENT_TIMESTAMP     |
 
-- **Runtime:** Bun (sudah terinstall)
-- **Framework:** `elysia`
-- **ORM:** `drizzle-orm`, `drizzle-kit`
-- **MySQL Driver:** `mysql2`
-- **Env:** `@t3-oss/env-core` + `zod` (opsional, untuk validasi env)
+> **Catatan:** Kolom `updated_at` yang ada di schema sebelumnya bisa dihapus atau tetap dipertahankan sesuai kebutuhan. Yang penting kolom `password` harus ditambahkan.
 
-## 3. Konfigurasi Database
-
-- Buat file `.env` dengan variable koneksi MySQL (`DATABASE_URL` atau host/port/user/password/database terpisah)
-- Buat file `.env.example` sebagai template
-- Setup koneksi Drizzle ke MySQL menggunakan `mysql2`
-- Buat `drizzle.config.ts` untuk konfigurasi Drizzle Kit (migrasi, dsb.)
-
-## 4. Schema Database
-
-- Buat minimal 1 contoh tabel di `src/db/schema.ts` (misalnya tabel `users` dengan kolom `id`, `name`, `email`, `created_at`)
-- Pastikan schema menggunakan Drizzle MySQL schema builder (`mysqlTable`)
-
-## 5. Setup ElysiaJS Server
-
-- Buat instance Elysia di `src/index.ts`
-- Pasang routes dari folder `routes/`
-- Buat minimal endpoint CRUD dasar untuk contoh tabel di atas:
-  - `GET /users` — ambil semua data
-  - `GET /users/:id` — ambil data by ID
-  - `POST /users` — buat data baru
-  - `PUT /users/:id` — update data
-  - `DELETE /users/:id` — hapus data
-- Server listen di port dari env variable (default `3000`)
-
-## 6. Script & Tooling
-
-- Tambahkan script di `package.json`:
-  - `dev` — jalankan server dengan hot reload (`bun run --watch src/index.ts`)
-  - `db:generate` — generate migrasi Drizzle (`drizzle-kit generate`)
-  - `db:migrate` — jalankan migrasi (`drizzle-kit migrate`)
-  - `db:studio` — buka Drizzle Studio (`drizzle-kit studio`)
-- Buat `.gitignore` yang sesuai (node_modules, .env, dll.)
-
-## 7. Dokumentasi
-
-- Update `README.md` dengan:
-  - Deskripsi singkat project
-  - Cara install & menjalankan
-  - Cara setup database
-  - Cara menjalankan migrasi
+Setelah schema diubah, jalankan:
+```bash
+bun run db:generate
+bun run db:migrate
+```
 
 ---
 
-## Catatan
+## 2. Install Dependency Tambahan
 
-- Pastikan semua kode menggunakan **TypeScript**
-- Gunakan **ESM** (import/export), bukan CommonJS
-- Ikuti konvensi Drizzle ORM terbaru untuk MySQL
-- Tidak perlu auth/middleware kompleks, cukup setup dasar yang bersih dan siap dikembangkan
+Install package untuk hashing password:
+```bash
+bun add bcryptjs
+bun add -d @types/bcryptjs
+```
+
+> Gunakan `bcryptjs` (pure JS) agar kompatibel dengan Bun runtime.
+
+---
+
+## 3. Buat Service Layer
+
+Buat file baru: `src/services/users_services.ts`
+
+File ini berisi logic bisnis untuk registrasi user:
+
+- **Fungsi: `registerUser(name, email, password)`**
+  1. Cek apakah email sudah terdaftar di database
+     - Jika sudah terdaftar, throw error dengan pesan `"Email sudah terdaftar"`
+  2. Hash password menggunakan bcrypt (salt rounds: 10)
+  3. Insert data user baru ke tabel `users` (name, email, hashed password)
+  4. Return `"OK"` jika berhasil
+
+---
+
+## 4. Buat Route
+
+Buat file baru: `src/routes/users-routes.ts`
+
+Definisikan endpoint:
+
+### `POST /api/users`
+
+**Request Body:**
+```json
+{
+    "name": "Bayy",
+    "email": "bayy@localhost",
+    "password": "bayy123"
+}
+```
+
+**Response Body (Success) — Status 201:**
+```json
+{
+    "data": "OK"
+}
+```
+
+**Response Body (Error: Email duplikat) — Status 400:**
+```json
+{
+    "eror": "Email sudah terdaftar"
+}
+```
+
+**Langkah di route handler:**
+1. Validasi request body menggunakan Elysia typebox (`t.Object`):
+   - `name`: string, minLength 1
+   - `email`: string, format email
+   - `password`: string, minLength 6
+2. Panggil `registerUser()` dari `users_services.ts`
+3. Jika sukses, kembalikan `{ "data": "OK" }` dengan status `201`
+4. Jika error (email duplikat), kembalikan `{ "eror": "Email sudah terdaftar" }` dengan status `400`
+
+---
+
+## 5. Register Route ke Server
+
+Di `src/index.ts`, import dan `.use()` route baru dari `src/routes/users-routes.ts`.
+
+> **Catatan:** Hapus atau sesuaikan route CRUD users lama di `src/routes/users.ts` jika konflik dengan endpoint baru.
+
+---
+
+## 6. Struktur Folder
+
+Pastikan struktur folder di dalam `src/` mengikuti konvensi ini:
+
+```
+src/
+├── db/
+│   ├── index.ts
+│   └── schema.ts        ← Update: tambahkan kolom password
+├── routes/
+│   ├── index.ts
+│   ├── users.ts          ← Route lama (opsional dipertahankan)
+│   └── users-routes.ts   ← [NEW] Route registrasi
+├── services/
+│   └── users_services.ts ← [NEW] Logic bisnis registrasi
+├── env.ts
+└── index.ts              ← Update: register route baru
+```
+
+**Konvensi penamaan file:**
+- Folder `routes/` → format: `nama-routes.ts` (kebab-case)
+- Folder `services/` → format: `nama_services.ts` (snake_case)
+
+---
+
+## 7. Testing Manual
+
+Setelah implementasi selesai, test dengan perintah berikut:
+
+**Registrasi user baru (harus berhasil):**
+```bash
+curl -X POST http://localhost:3000/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Bayy","email":"bayy@localhost","password":"bayy123"}'
+```
+Expected: `{"data":"OK"}` dengan status 201
+
+**Registrasi dengan email yang sama (harus gagal):**
+```bash
+curl -X POST http://localhost:3000/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Bayy2","email":"bayy@localhost","password":"bayy456"}'
+```
+Expected: `{"eror":"Email sudah terdaftar"}` dengan status 400
+
+---
+
+## Checklist Implementasi
+
+- [x] Update schema `users` di `src/db/schema.ts` (tambah kolom `password`, sesuaikan kolom lain)
+- [x] Jalankan `bun run db:generate` dan `bun run db:migrate`
+- [x] Install `bcryptjs` dan `@types/bcryptjs`
+- [x] Buat `src/services/users_services.ts` dengan fungsi `registerUser`
+- [x] Buat `src/routes/users-routes.ts` dengan endpoint `POST /api/users`
+- [x] Register route baru di `src/index.ts`
+- [x] Test manual dengan curl

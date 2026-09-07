@@ -5,7 +5,14 @@ import { users } from "../db/schema";
 
 export const userRoutes = new Elysia({ prefix: "/users" })
   .get("/", async () => {
-    return await db.select().from(users);
+    return await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        createdAt: users.createdAt,
+      })
+      .from(users);
   })
   .get(
     "/:id",
@@ -16,7 +23,16 @@ export const userRoutes = new Elysia({ prefix: "/users" })
         return { message: "Invalid ID" };
       }
 
-      const [user] = await db.select().from(users).where(eq(users.id, id));
+      const [user] = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(eq(users.id, id));
+
       if (!user) {
         set.status = 404;
         return { message: "User not found" };
@@ -27,27 +43,6 @@ export const userRoutes = new Elysia({ prefix: "/users" })
     {
       params: t.Object({
         id: t.String(),
-      }),
-    }
-  )
-  .post(
-    "/",
-    async ({ body, set }) => {
-      const result = await db.insert(users).values({
-        name: body.name,
-        email: body.email,
-      });
-
-      set.status = 201;
-      return {
-        message: "User created successfully",
-        id: result[0].insertId,
-      };
-    },
-    {
-      body: t.Object({
-        name: t.String({ minLength: 1 }),
-        email: t.String({ format: "email" }),
       }),
     }
   )
