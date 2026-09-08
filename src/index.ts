@@ -1,10 +1,22 @@
 import { Elysia } from "elysia";
+import { swagger } from "@elysiajs/swagger";
 import { env } from "./env";
 import { userRoutes } from "./routes/users";
 import { usersRoutes } from "./routes/users-routes";
 import { apiRoutes } from "./routes";
 
 export const app = new Elysia()
+  .use(
+    swagger({
+      documentation: {
+        info: {
+          title: "Belajar REST API",
+          version: "1.0.0",
+          description: "Dokumentasi API untuk aplikasi Belajar REST API",
+        },
+      },
+    })
+  )
   .get("/", () => ({
     message: "Welcome to Bun + ElysiaJS + Drizzle + MySQL API",
     status: "ok",

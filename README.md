@@ -15,6 +15,7 @@ Proyek ini dibangun menggunakan teknologi dan *library* modern:
   - `Elysia t` (TypeBox bawaan ElysiaJS) untuk validasi request body/params API.
   - `Zod` untuk memvalidasi *environment variables* saat aplikasi dijalankan.
 - **Keamanan:** `bcryptjs` - Untuk hashing dan komparasi password dengan aman.
+- **Dokumentasi API:** `@elysiajs/swagger` - Menyediakan Swagger UI interaktif dan spesifikasi OpenAPI secara otomatis.
 - **Test Runner:** `bun:test` - Modul pengujian bawaan dari Bun.
 
 ---
@@ -91,6 +92,11 @@ Menyimpan data sesi login (token) yang merujuk ke tabel `users`.
 | `DELETE`| `/api/users/:id` | Menghapus user | Params: `id` |
 
 *(Catatan: Rute CRUD juga tersedia melalui prefix `/users` bawaan).*
+
+### 📖 Dokumentasi Interaktif (Swagger UI)
+Aplikasi ini menyediakan antarmuka interaktif Swagger UI untuk melihat spesifikasi OpenAPI dan menguji seluruh endpoint secara langsung:
+- **URL Swagger UI:** `http://localhost:3000/swagger`
+- **OpenAPI JSON Spec:** `http://localhost:3000/swagger/json`
 
 ---
 
