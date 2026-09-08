@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import {
   getCurrentUser,
   loginUser,
+  logoutUser,
   registerUser,
 } from "../services/users_services";
 
@@ -90,6 +91,39 @@ export const usersRoutes = new Elysia()
         set.status = 200;
         return {
           data: user,
+        };
+      } catch {
+        set.status = 401;
+        return {
+          eror: "Unauthorized",
+        };
+      }
+    }
+  )
+  .delete(
+    "/api/users/login/current",
+    async ({ headers, set }) => {
+      const authHeader = headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        set.status = 401;
+        return {
+          eror: "Unauthorized",
+        };
+      }
+
+      const token = authHeader.slice(7).trim();
+      if (!token) {
+        set.status = 401;
+        return {
+          eror: "Unauthorized",
+        };
+      }
+
+      try {
+        const result = await logoutUser(token);
+        set.status = 200;
+        return {
+          data: result,
         };
       } catch {
         set.status = 401;
