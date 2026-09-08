@@ -1,152 +1,63 @@
-# Issue: Implementasi API Logout User
+# Issue: Perbaikan Bug Validasi Panjang Input pada Registrasi User
 
 ## Deskripsi
 
-Buatkan API untuk logout user. API ini membaca token dari header `Authorization: Bearer <token>`, memvalidasi token di tabel `sessions`, dan jika valid maka menghapus data session tersebut dari database sehingga token tidak bisa digunakan lagi.
+Saat ini, jika seorang user mencoba melakukan registrasi dengan nama (atau data lain) yang melebihi 255 karakter, sistem akan mengalami error. Hal ini disebabkan karena skema database (MySQL) membatasi panjang kolom sebesar `VARCHAR(255)`, tetapi validasi di sisi aplikasi (ElysiaJS) belum memberikan batasan maksimal yang sesuai.
+
+Akibatnya, query SQL akan gagal dan API akan mengembalikan pesan error internal yang berisi detail query dan *hash password* kepada client. Hal ini merupakan celah keamanan (information disclosure) yang harus segera diperbaiki.
 
 ---
 
-## 1. Update Service Layer
-
-Update file: `src/services/users_services.ts`
-
-Tambahkan fungsi baru untuk logout:
-
-- **Fungsi: `logoutUser(token)`**
-  1. Query ke tabel `sessions` berdasarkan `token`
-     - Jika session tidak ditemukan, throw error dengan pesan `"Unauthorized"`
-  2. Hapus record session dengan token tersebut dari tabel `sessions`
-  3. Return `"OK"` jika berhasil
-
----
-
-## 2. Update Route
+## 1. Update Validasi di Routing Layer
 
 Update file: `src/routes/users-routes.ts`
 
-Tambahkan endpoint baru:
+Tambahkan batasan `maxLength: 255` pada skema validasi `t.Object` untuk endpoint **POST `/api/users`** (Registrasi).
 
-### `DELETE /api/users/login/current`
+- **Sebelumnya:**
+  ```typescript
+  body: t.Object({
+    name: t.String({ minLength: 1 }),
+    email: t.String({ pattern: "^[^\\s@]+@[^\\s@]+$" }),
+    password: t.String({ minLength: 1 }),
+  }),
+  ```
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+- **Perbaikan yang harus dilakukan:**
+  1. Tambahkan properti `maxLength: 255` pada field `name`.
+  2. Tambahkan properti `maxLength: 255` pada field `email`.
+  3. Tambahkan properti `maxLength: 255` pada field `password`.
 
-> Token diambil dari header `Authorization`. Format: `Bearer <token>`. Parse header untuk mengambil bagian token saja (setelah `"Bearer "`).
-
-**Response Body (Success) — Status 200:**
-```json
-{
-    "data": "OK"
-}
-```
-
-> Jika success logout, data session dengan token tersebut **harus dihapus** dari database (tabel `sessions`). Token yang sama tidak boleh bisa digunakan lagi setelah logout.
-
-**Response Body (Error: Token tidak valid / tidak ada) — Status 401:**
-```json
-{
-    "eror": "Unauthorized"
-}
-```
-
-**Langkah di route handler:**
-1. Ambil header `Authorization` dari request (`headers.authorization`)
-2. Cek apakah header ada dan diawali dengan `"Bearer "`
-   - Jika tidak ada atau format salah, kembalikan status `401` dengan `{ "eror": "Unauthorized" }`
-3. Extract token dari header (hapus prefix `"Bearer "`)
-4. Panggil `logoutUser(token)` dari `users_services.ts`
-5. Jika sukses, kembalikan `{ "data": "OK" }` dengan status `200`
-6. Jika error (token tidak valid), kembalikan `{ "eror": "Unauthorized" }` dengan status `401`
+  *Catatan:* Panjang `VARCHAR` di database (`src/db/schema.ts`) untuk ketiga kolom tersebut adalah 255.
 
 ---
 
-## 3. Register Route ke Server
+## 2. Update Validasi di Endpoint Login (Opsional tetapi disarankan)
 
-Pastikan route baru sudah terdaftar di `src/index.ts`.
-
-> Jika `users-routes.ts` sudah di-import dan di-`.use()` di `src/index.ts`, tidak perlu perubahan tambahan — cukup tambahkan endpoint baru di file yang sama.
+Pada file yang sama (`src/routes/users-routes.ts`), endpoint **POST `/api/users/login`** juga menerima input `email` dan `password`. Agar konsisten, tambahkan juga batasan `maxLength: 255` pada skema validasi endpoint ini.
 
 ---
 
-## 4. Struktur Folder
+## 3. Testing Manual
 
-Pastikan struktur folder di dalam `src/` tetap mengikuti konvensi ini:
+Setelah perbaikan dilakukan, uji coba menggunakan `curl` atau aplikasi seperti Postman:
 
-```
-src/
-├── db/
-│   ├── index.ts
-│   └── schema.ts
-├── routes/
-│   ├── index.ts
-│   ├── users.ts
-│   └── users-routes.ts   ← Update: tambahkan endpoint DELETE logout
-├── services/
-│   └── users_services.ts ← Update: tambahkan fungsi logoutUser
-├── env.ts
-└── index.ts
-```
-
-**Konvensi penamaan file:**
-- Folder `routes/` → format: `nama-routes.ts` (kebab-case)
-- Folder `services/` → format: `nama_services.ts` (snake_case)
-
----
-
-## 5. Testing Manual
-
-Setelah implementasi selesai, test dengan perintah berikut:
-
-**Login terlebih dahulu untuk mendapatkan token:**
+**Testing Nama Lebih dari 255 Karakter (Harus Gagal oleh Validasi Elysia, bukan Database):**
 ```bash
-curl -s -X POST http://localhost:3000/api/users/login \
+# Membuat nama dengan 300 karakter 'a'
+NAME=$(printf 'a%.0s' {1..300})
+
+curl -s -X POST http://localhost:3000/api/users \
   -H "Content-Type: application/json" \
-  -d '{"email":"bayy@localhost","password":"bayy123"}'
+  -d "{\"name\":\"$NAME\", \"email\":\"longname@localhost\", \"password\":\"password123\"}"
 ```
-Catat nilai `data` (token UUID) dari response.
-
-**Pastikan token valid (get current user):**
-```bash
-curl -i -X GET http://localhost:3000/api/users/login/current \
-  -H "Authorization: Bearer <token-dari-login>"
-```
-Expected: `{"data":{...}}` dengan status 200
-
-**Logout dengan token valid (harus berhasil):**
-```bash
-curl -i -X DELETE http://localhost:3000/api/users/login/current \
-  -H "Authorization: Bearer <token-dari-login>"
-```
-Expected: `{"data":"OK"}` dengan status 200
-
-**Coba get current user lagi dengan token yang sama (harus gagal karena sudah logout):**
-```bash
-curl -i -X GET http://localhost:3000/api/users/login/current \
-  -H "Authorization: Bearer <token-yang-sudah-logout>"
-```
-Expected: `{"eror":"Unauthorized"}` dengan status 401
-
-**Logout tanpa header Authorization (harus gagal):**
-```bash
-curl -i -X DELETE http://localhost:3000/api/users/login/current
-```
-Expected: `{"eror":"Unauthorized"}` dengan status 401
-
-**Logout dengan token asal-asalan (harus gagal):**
-```bash
-curl -i -X DELETE http://localhost:3000/api/users/login/current \
-  -H "Authorization: Bearer token-asal-asalan"
-```
-Expected: `{"eror":"Unauthorized"}` dengan status 401
+*Expected Result:* HTTP Status `400 Bad Request` atau `422 Unprocessable Entity` yang berasal dari validasi bawaan ElysiaJS (biasanya berupa response JSON dengan pesan error spesifik terkait `maxLength`), **bukan** error yang berisi kalimat `"Failed query: insert into..."`.
 
 ---
 
 ## Checklist Implementasi
 
-- [x] Tambahkan fungsi `logoutUser` di `src/services/users_services.ts`
-- [x] Tambahkan endpoint `DELETE /api/users/login/current` di `src/routes/users-routes.ts`
-- [x] Pastikan route terdaftar di `src/index.ts`
-- [x] Test manual dengan curl (logout sukses, token sudah tidak valid setelah logout, tanpa header, token salah)
-
+- [x] Buka file `src/routes/users-routes.ts`.
+- [x] Tambahkan `maxLength: 255` pada field `name`, `email`, dan `password` di validasi endpoint POST `/api/users`.
+- [x] Tambahkan `maxLength: 255` pada field `email` dan `password` di validasi endpoint POST `/api/users/login`.
+- [x] Lakukan pengujian manual untuk memastikan input dengan panjang > 255 karakter ditolak oleh validasi Elysia.

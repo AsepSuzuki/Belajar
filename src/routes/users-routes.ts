@@ -31,9 +31,9 @@ export const usersRoutes = new Elysia()
     },
     {
       body: t.Object({
-        name: t.String({ minLength: 1 }),
-        email: t.String({ pattern: "^[^\\s@]+@[^\\s@]+$" }),
-        password: t.String({ minLength: 1 }),
+        name: t.String({ minLength: 1, maxLength: 255 }),
+        email: t.String({ pattern: "^[^\\s@]+@[^\\s@]+$", maxLength: 255 }),
+        password: t.String({ minLength: 1, maxLength: 255 }),
       }),
     }
   )
@@ -61,8 +61,8 @@ export const usersRoutes = new Elysia()
     },
     {
       body: t.Object({
-        email: t.String({ pattern: "^[^\\s@]+@[^\\s@]+$" }),
-        password: t.String({ minLength: 1 }),
+        email: t.String({ pattern: "^[^\\s@]+@[^\\s@]+$", maxLength: 255 }),
+        password: t.String({ minLength: 1, maxLength: 255 }),
       }),
     }
   )
