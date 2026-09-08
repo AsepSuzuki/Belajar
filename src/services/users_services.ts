@@ -115,3 +115,22 @@ export async function getCurrentUser(token: string): Promise<CurrentUserResponse
 
   return user;
 }
+
+export async function logoutUser(token: string): Promise<string> {
+  // 1. Cari session berdasarkan token
+  const [session] = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
+
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+
+  // 2. Hapus session dari tabel sessions
+  await db.delete(sessions).where(eq(sessions.token, token));
+
+  // 3. Return "OK"
+  return "OK";
+}
