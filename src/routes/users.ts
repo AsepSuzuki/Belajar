@@ -4,7 +4,7 @@ import { db } from "../db";
 import { users } from "../db/schema";
 
 export const userRoutes = new Elysia({ prefix: "/users" })
-  .get("/", async () => {
+  .get("", async () => {
     return await db
       .select({
         id: users.id,

@@ -1,63 +1,72 @@
-# Issue: Perbaikan Bug Validasi Panjang Input pada Registrasi User
+# Issue: Pembuatan Unit Test untuk Seluruh API
 
 ## Deskripsi
+Buatkan unit test untuk semua API yang tersedia pada aplikasi ini menggunakan test runner bawaan Bun (`bun test`).
+Simpan seluruh file unit test di dalam folder `tests/`.
 
-Saat ini, jika seorang user mencoba melakukan registrasi dengan nama (atau data lain) yang melebihi 255 karakter, sistem akan mengalami error. Hal ini disebabkan karena skema database (MySQL) membatasi panjang kolom sebesar `VARCHAR(255)`, tetapi validasi di sisi aplikasi (ElysiaJS) belum memberikan batasan maksimal yang sesuai.
-
-Akibatnya, query SQL akan gagal dan API akan mengembalikan pesan error internal yang berisi detail query dan *hash password* kepada client. Hal ini merupakan celah keamanan (information disclosure) yang harus segera diperbaiki.
-
----
-
-## 1. Update Validasi di Routing Layer
-
-Update file: `src/routes/users-routes.ts`
-
-Tambahkan batasan `maxLength: 255` pada skema validasi `t.Object` untuk endpoint **POST `/api/users`** (Registrasi).
-
-- **Sebelumnya:**
-  ```typescript
-  body: t.Object({
-    name: t.String({ minLength: 1 }),
-    email: t.String({ pattern: "^[^\\s@]+@[^\\s@]+$" }),
-    password: t.String({ minLength: 1 }),
-  }),
-  ```
-
-- **Perbaikan yang harus dilakukan:**
-  1. Tambahkan properti `maxLength: 255` pada field `name`.
-  2. Tambahkan properti `maxLength: 255` pada field `email`.
-  3. Tambahkan properti `maxLength: 255` pada field `password`.
-
-  *Catatan:* Panjang `VARCHAR` di database (`src/db/schema.ts`) untuk ketiga kolom tersebut adalah 255.
+## Aturan Penting
+1. **Konsistensi Data:** Sebelum menjalankan setiap skenario test, pastikan untuk menghapus/mereset data di tabel terkait (misalnya tabel `users` dan `sessions`) agar test selalu berjalan di lingkungan data yang bersih (clean state).
+2. **Framework:** Gunakan framework bawaan `bun:test` (`describe`, `it`, `expect`, `beforeEach`/`afterEach`).
+3. **Struktur Folder:** Letakkan file test di dalam folder `tests/` (contoh: `tests/users-auth.test.ts`, `tests/users-crud.test.ts`).
 
 ---
 
-## 2. Update Validasi di Endpoint Login (Opsional tetapi disarankan)
+## Skenario Test
 
-Pada file yang sama (`src/routes/users-routes.ts`), endpoint **POST `/api/users/login`** juga menerima input `email` dan `password`. Agar konsisten, tambahkan juga batasan `maxLength: 255` pada skema validasi endpoint ini.
+Berikut adalah skenario test per API yang harus diimplementasikan. Buatkan unit test selengkap mungkin berdasarkan skenario berikut:
+
+### 1. Registrasi User (`POST /api/users`)
+- **Positif:**
+  - Registrasi dengan data valid harus mengembalikan status 201 Created dan pesan sukses.
+- **Negatif:**
+  - Registrasi gagal jika format email tidak valid.
+  - Registrasi gagal jika field `name`, `email`, atau `password` kosong.
+  - Registrasi gagal jika email sudah digunakan oleh user lain.
+  - Registrasi gagal jika panjang input melebihi 255 karakter (validasi panjang).
+
+### 2. Login User (`POST /api/users/login`)
+- **Positif:**
+  - Login berhasil dengan email dan password yang benar, dan mengembalikan token UUID.
+- **Negatif:**
+  - Login gagal jika email tidak ditemukan.
+  - Login gagal jika password salah.
+  - Login gagal dengan input email yang tidak valid atau terlalu panjang.
+
+### 3. Get Current User (`GET /api/users/login/current`)
+- **Positif:**
+  - Request dengan header `Authorization: Bearer <token_valid>` yang ada di tabel sessions harus mengembalikan data user saat ini (id, name, email, created_at) tanpa kolom password.
+- **Negatif:**
+  - Request gagal (401 Unauthorized) jika tidak menyertakan header Authorization.
+  - Request gagal (401 Unauthorized) jika format header Authorization salah (tidak memakai `Bearer`).
+  - Request gagal (401 Unauthorized) jika token tidak ditemukan di database (invalid atau sudah terhapus).
+
+### 4. Get All Users (`GET /api/users`)
+- **Positif:**
+  - Jika tidak ada data user, kembalikan array kosong.
+  - Jika ada data user, kembalikan list semua user (hanya mengembalikan id, name, email, created_at).
+
+### 5. Get User By ID (`GET /api/users/:id`)
+- **Positif:**
+  - Request dengan ID yang terdaftar di database akan mengembalikan detail data user tersebut.
+- **Negatif:**
+  - Request gagal (404 Not Found) jika ID tidak ada di database.
+  - Request gagal (400 Bad Request) jika ID yang diberikan bukan angka valid.
+
+### 6. Update User (`PUT /api/users/:id`)
+- **Positif:**
+  - Berhasil mengubah `name` saja pada user yang valid.
+  - Berhasil mengubah `email` saja pada user yang valid.
+- **Negatif:**
+  - Update gagal (404 Not Found) jika ID tidak ditemukan.
+  - Update gagal (400 Bad Request) jika format email baru tidak valid.
+
+### 7. Delete User (`DELETE /api/users/:id`)
+- **Positif:**
+  - Berhasil menghapus user yang valid dari database.
+- **Negatif:**
+  - Delete gagal (404 Not Found) jika ID tidak ditemukan.
 
 ---
+**Catatan untuk Junior Programmer / AI:**
+Silakan lengkapi detail implementasinya, seperti setup Drizzle DB, inisiasi aplikasi Elysia untuk di-request langsung lewat `app.handle(new Request(...))`, dan pembersihan data di block `beforeEach`. Gunakan skenario di atas sebagai acuan.
 
-## 3. Testing Manual
-
-Setelah perbaikan dilakukan, uji coba menggunakan `curl` atau aplikasi seperti Postman:
-
-**Testing Nama Lebih dari 255 Karakter (Harus Gagal oleh Validasi Elysia, bukan Database):**
-```bash
-# Membuat nama dengan 300 karakter 'a'
-NAME=$(printf 'a%.0s' {1..300})
-
-curl -s -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"$NAME\", \"email\":\"longname@localhost\", \"password\":\"password123\"}"
-```
-*Expected Result:* HTTP Status `400 Bad Request` atau `422 Unprocessable Entity` yang berasal dari validasi bawaan ElysiaJS (biasanya berupa response JSON dengan pesan error spesifik terkait `maxLength`), **bukan** error yang berisi kalimat `"Failed query: insert into..."`.
-
----
-
-## Checklist Implementasi
-
-- [x] Buka file `src/routes/users-routes.ts`.
-- [x] Tambahkan `maxLength: 255` pada field `name`, `email`, dan `password` di validasi endpoint POST `/api/users`.
-- [x] Tambahkan `maxLength: 255` pada field `email` dan `password` di validasi endpoint POST `/api/users/login`.
-- [x] Lakukan pengujian manual untuk memastikan input dengan panjang > 255 karakter ditolak oleh validasi Elysia.
