@@ -14,6 +14,13 @@ export interface LoginUserInput {
   password: string;
 }
 
+export interface CurrentUserResponse {
+  id: number;
+  name: string;
+  email: string;
+  created_at: Date;
+}
+
 export async function registerUser({
   name,
   email,
@@ -76,4 +83,35 @@ export async function loginUser({
 
   // 5. Return token UUID
   return token;
+}
+
+export async function getCurrentUser(token: string): Promise<CurrentUserResponse> {
+  // 1. Cari session berdasarkan token
+  const [session] = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
+
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+
+  // 2. Cari user berdasarkan user_id dari session
+  const [user] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      created_at: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.id, session.userId))
+    .limit(1);
+
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
+  return user;
 }

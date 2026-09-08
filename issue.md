@@ -1,92 +1,74 @@
-# Issue: Implementasi API Login User
+# Issue: Implementasi API Get Current User
 
 ## Deskripsi
 
-Buatkan API untuk login user. API ini menerima data login (email, password), memverifikasi kredensial terhadap data di database, dan jika berhasil mengembalikan token UUID yang disimpan di tabel `sessions`.
+Buatkan API untuk mengambil data user yang sedang login berdasarkan token session. API ini membaca token dari header `Authorization: Bearer <token>`, memvalidasi token di tabel `sessions`, dan mengembalikan data user yang terkait.
 
 ---
 
-## 1. Buat Tabel Sessions
-
-Tambahkan tabel `sessions` di `src/db/schema.ts` dengan struktur berikut:
-
-| Kolom        | Tipe           | Keterangan                              |
-|-------------|----------------|-----------------------------------------|
-| `id`         | INT            | Auto Increment, Primary Key             |
-| `token`      | VARCHAR(255)   | NOT NULL (isinya UUID)                  |
-| `user_id`    | INT            | Foreign Key ke tabel `users` kolom `id` |
-| `created_at` | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP               |
-
-> **Catatan:** Pastikan kolom `user_id` memiliki relasi foreign key ke tabel `users`. Gunakan `references` dari Drizzle ORM untuk mendefinisikan FK.
-
-Setelah schema ditambahkan, jalankan:
-```bash
-bun run db:generate
-bun run db:migrate
-```
-
----
-
-## 2. Update Service Layer
+## 1. Update Service Layer
 
 Update file: `src/services/users_services.ts`
 
-Tambahkan fungsi baru untuk login:
+Tambahkan fungsi baru untuk mendapatkan user saat ini:
 
-- **Fungsi: `loginUser(email, password)`**
-  1. Query ke tabel `users` berdasarkan `email`
-     - Jika user tidak ditemukan, throw error dengan pesan `"Email atau password salah"`
-  2. Bandingkan `password` yang dikirim dengan hash password di database menggunakan `bcrypt.compare()`
-     - Jika tidak cocok, throw error dengan pesan `"Email atau password salah"`
-  3. Generate token UUID menggunakan `crypto.randomUUID()` (built-in di Bun/Node.js, tidak perlu install package tambahan)
-  4. Simpan token ke tabel `sessions` dengan `user_id` dari user yang ditemukan
-  5. Return token UUID tersebut
+- **Fungsi: `getCurrentUser(token)`**
+  1. Query ke tabel `sessions` berdasarkan `token`
+     - Jika session tidak ditemukan, throw error dengan pesan `"Unauthorized"`
+  2. Ambil `user_id` dari session yang ditemukan
+  3. Query ke tabel `users` berdasarkan `user_id` (atau gunakan join)
+     - Jika user tidak ditemukan, throw error dengan pesan `"Unauthorized"`
+  4. Return data user (hanya kolom: `id`, `name`, `email`, `created_at`)
+     - **Jangan** kembalikan kolom `password`
 
 ---
 
-## 3. Update Route
+## 2. Update Route
 
 Update file: `src/routes/users-routes.ts`
 
 Tambahkan endpoint baru:
 
-### `POST /api/users/login`
+### `GET /api/users/login/current`
 
-**Request Body:**
-```json
-{
-    "email": "bayy@localhost",
-    "password": "bayy123"
-}
+**Headers:**
 ```
+Authorization: Bearer <token>
+```
+
+> Token diambil dari header `Authorization`. Format: `Bearer <token>`. Parse header untuk mengambil bagian token saja (setelah `"Bearer "`).
 
 **Response Body (Success) — Status 200:**
 ```json
 {
-    "data": "550e8400-e29b-41d4-a716-446655440000"
+    "data": {
+        "id": 1,
+        "name": "bayy",
+        "email": "bayy@localhost",
+        "created_at": "timestamp"
+    }
 }
 ```
 
-> Nilai `"data"` berisi token UUID yang dihasilkan saat login.
-
-**Response Body (Error: Kredensial salah) — Status 400:**
+**Response Body (Error: Token tidak valid / tidak ada) — Status 401:**
 ```json
 {
-    "eror": "Email atau password salah"
+    "eror": "Unauthorized"
 }
 ```
 
 **Langkah di route handler:**
-1. Validasi request body menggunakan Elysia typebox (`t.Object`):
-   - `email`: string (gunakan pattern regex seperti endpoint registrasi)
-   - `password`: string, minLength 1
-2. Panggil `loginUser()` dari `users_services.ts`
-3. Jika sukses, kembalikan `{ "data": "<token>" }` dengan status `200`
-4. Jika error (email/password salah), kembalikan `{ "eror": "Email atau password salah" }` dengan status `400`
+1. Ambil header `Authorization` dari request (`headers.authorization`)
+2. Cek apakah header ada dan diawali dengan `"Bearer "`
+   - Jika tidak ada atau format salah, kembalikan status `401` dengan `{ "eror": "Unauthorized" }`
+3. Extract token dari header (hapus prefix `"Bearer "`)
+4. Panggil `getCurrentUser(token)` dari `users_services.ts`
+5. Jika sukses, kembalikan `{ "data": { id, name, email, created_at } }` dengan status `200`
+6. Jika error (token tidak valid), kembalikan `{ "eror": "Unauthorized" }` dengan status `401`
 
 ---
 
-## 4. Register Route ke Server
+## 3. Register Route ke Server
 
 Pastikan route baru sudah terdaftar di `src/index.ts`.
 
@@ -94,7 +76,7 @@ Pastikan route baru sudah terdaftar di `src/index.ts`.
 
 ---
 
-## 5. Struktur Folder
+## 4. Struktur Folder
 
 Pastikan struktur folder di dalam `src/` tetap mengikuti konvensi ini:
 
@@ -102,13 +84,13 @@ Pastikan struktur folder di dalam `src/` tetap mengikuti konvensi ini:
 src/
 ├── db/
 │   ├── index.ts
-│   └── schema.ts        ← Update: tambahkan tabel sessions
+│   └── schema.ts
 ├── routes/
 │   ├── index.ts
 │   ├── users.ts
-│   └── users-routes.ts   ← Update: tambahkan endpoint login
+│   └── users-routes.ts   ← Update: tambahkan endpoint GET current user
 ├── services/
-│   └── users_services.ts ← Update: tambahkan fungsi loginUser
+│   └── users_services.ts ← Update: tambahkan fungsi getCurrentUser
 ├── env.ts
 └── index.ts
 ```
@@ -119,49 +101,43 @@ src/
 
 ---
 
-## 6. Testing Manual
+## 5. Testing Manual
 
 Setelah implementasi selesai, test dengan perintah berikut:
 
-**Pastikan user sudah terdaftar terlebih dahulu (registrasi):**
+**Login terlebih dahulu untuk mendapatkan token:**
 ```bash
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Bayy","email":"bayy@localhost","password":"bayy123"}'
-```
-
-**Login dengan kredensial yang benar (harus berhasil):**
-```bash
-curl -X POST http://localhost:3000/api/users/login \
+curl -s -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
   -d '{"email":"bayy@localhost","password":"bayy123"}'
 ```
-Expected: `{"data":"<uuid-token>"}` dengan status 200
+Catat nilai `data` (token UUID) dari response.
 
-**Login dengan password salah (harus gagal):**
+**Get current user dengan token valid (harus berhasil):**
 ```bash
-curl -X POST http://localhost:3000/api/users/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"bayy@localhost","password":"salah123"}'
+curl -i -X GET http://localhost:3000/api/users/login/current \
+  -H "Authorization: Bearer <token-dari-login>"
 ```
-Expected: `{"eror":"Email atau password salah"}` dengan status 400
+Expected: `{"data":{"id":1,"name":"bayy","email":"bayy@localhost","created_at":"..."}}` dengan status 200
 
-**Login dengan email tidak terdaftar (harus gagal):**
+**Get current user tanpa header Authorization (harus gagal):**
 ```bash
-curl -X POST http://localhost:3000/api/users/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"tidak@ada","password":"bayy123"}'
+curl -i -X GET http://localhost:3000/api/users/login/current
 ```
-Expected: `{"eror":"Email atau password salah"}` dengan status 400
+Expected: `{"eror":"Unauthorized"}` dengan status 401
+
+**Get current user dengan token asal-asalan (harus gagal):**
+```bash
+curl -i -X GET http://localhost:3000/api/users/login/current \
+  -H "Authorization: Bearer token-asal-asalan"
+```
+Expected: `{"eror":"Unauthorized"}` dengan status 401
 
 ---
 
 ## Checklist Implementasi
 
-- [x] Tambahkan tabel `sessions` di `src/db/schema.ts` dengan FK ke `users`
-- [x] Jalankan `bun run db:generate` dan `bun run db:migrate`
-- [x] Tambahkan fungsi `loginUser` di `src/services/users_services.ts`
-- [x] Tambahkan endpoint `POST /api/users/login` di `src/routes/users-routes.ts`
+- [x] Tambahkan fungsi `getCurrentUser` di `src/services/users_services.ts`
+- [x] Tambahkan endpoint `GET /api/users/login/current` di `src/routes/users-routes.ts`
 - [x] Pastikan route terdaftar di `src/index.ts`
-- [x] Test manual dengan curl (login sukses, password salah, email tidak terdaftar)
-
+- [x] Test manual dengan curl (token valid, tanpa header, token salah)
